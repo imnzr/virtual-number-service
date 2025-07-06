@@ -12,6 +12,13 @@ type Config struct {
 	SimApiUrlService string `json:"sim_api_url_service"`
 }
 
+func LoadEnv() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("error loading .env file")
+	}
+}
+
 func LoadConfig() Config {
 	err := godotenv.Load()
 	if err != nil {
