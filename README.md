@@ -1,1 +1,2 @@
 # Virtual Number Services
+When registering on social media platforms, messengers, C2C platforms, and other websites, users may be required to complete SMS verification. Virtual Number Service offers a way to bypass said verification thanks to temporary virtual phone numbers — you no longer have to rely on your actual phone number. Create multiple accounts on various platforms by receiving a verification code online.
