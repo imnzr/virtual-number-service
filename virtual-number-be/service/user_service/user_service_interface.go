@@ -10,7 +10,7 @@ type UserServiceInterface interface {
 	CreateUser(ctx context.Context, request *models.User) error
 	DeleteUser(ctx context.Context, user_id int) error
 
-	UpdateUserUsername(ctx context.Context, user_id int) (*models.User, error)
+	UpdateUserUsername(ctx context.Context, user_id int, username string) (*models.User, error)
 	UpdateUserEmail(ctx context.Context, user_id int) (*models.User, error)
 	UpdateUserPassword(ctx context.Context, user_id int) (*models.User, error)
 
