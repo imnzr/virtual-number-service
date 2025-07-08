@@ -1,6 +1,8 @@
 package usercontroller
 
 import (
+	"strconv"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/imnzr/virtual-number-service/config"
 	"github.com/imnzr/virtual-number-service/models"
@@ -107,7 +109,39 @@ func (uc *UserControllerImplement) UpdateUserPassword(controller *fiber.Ctx) err
 
 // UpdateUserUsername implements UserControllerInterface.
 func (uc *UserControllerImplement) UpdateUserUsername(controller *fiber.Ctx) error {
-	panic("unimplemented")
+	var user models.User
+
+	idParams := controller.Params("id")
+	userId, err := strconv.Atoi(idParams)
+
+	if err != nil || userId <= 0 {
+		return controller.Status(400).JSON(fiber.Map{
+			"message": err.Error(),
+		})
+	}
+
+	if err := controller.BodyParser(&user); err != nil {
+		return controller.Status(400).JSON(fiber.Map{
+			"message": err.Error(),
+		})
+	}
+	getUser, err := uc.UserService.GetUserById(controller.Context(), userId)
+	if err != nil || getUser == nil {
+		return controller.Status(400).JSON(fiber.Map{
+			"error": "user not found",
+		})
+	}
+
+	updatedUser, err := uc.UserService.UpdateUserUsername(controller.Context(), userId, user.Username)
+	if err != nil {
+		return controller.Status(400).JSON(fiber.Map{
+			"message": err.Error(),
+		})
+	}
+
+	return controller.JSON(fiber.Map{
+		"username": updatedUser.Username,
+	})
 }
 
 func NewUserController(userservice userservice.UserServiceInterface) UserControllerInterface {
