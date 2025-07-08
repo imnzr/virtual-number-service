@@ -75,7 +75,16 @@ func (service *UserServiceImplement) GetUserByEmail(ctx context.Context, email s
 
 // GetUserById implements UserServiceInterface.
 func (service *UserServiceImplement) GetUserById(ctx context.Context, user_id int) (*models.User, error) {
-	panic("unimplemented")
+	tx, err := service.DB.Begin()
+	helper.ErrorTransaction(err)
+	defer helper.CommitOrRollback(tx)
+
+	result, err := service.UserRepository.GetUserById(ctx, tx, user_id)
+	if err != nil {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	return result, nil
 }
 
 // LoginUser implements UserServiceInterface.
@@ -117,8 +126,26 @@ func (service *UserServiceImplement) UpdateUserPassword(ctx context.Context, use
 }
 
 // UpdateUserUsername implements UserServiceInterface.
-func (service *UserServiceImplement) UpdateUserUsername(ctx context.Context, user_id int) (*models.User, error) {
-	panic("unimplemented")
+func (service *UserServiceImplement) UpdateUserUsername(ctx context.Context, user_id int, username string) (*models.User, error) {
+	tx, err := service.DB.Begin()
+	helper.ErrorTransaction(err)
+	defer helper.CommitOrRollback(tx)
+
+	user, err := service.UserRepository.GetUserById(ctx, tx, user_id)
+	if err != nil {
+		log.Printf("user not found")
+		return nil, fmt.Errorf("error, user not found")
+	}
+
+	user.Username = username
+
+	_, err = service.UserRepository.UpdateUserUsername(ctx, tx, user)
+	if err != nil {
+		log.Printf("error updating user username with id %v", err)
+		return nil, fmt.Errorf("error updating username")
+	}
+
+	return user, nil
 }
 
 func NewUserService(userRepository userrepository.UserRepositoryInterface, db *sql.DB) UserServiceInterface {
