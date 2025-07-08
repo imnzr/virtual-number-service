@@ -2,11 +2,15 @@ package main
 
 import (
 	"log"
-	"net/http"
 
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/gofiber/fiber/v2"
 	"github.com/imnzr/virtual-number-service/config"
+	usercontroller "github.com/imnzr/virtual-number-service/controller/user_controller"
 	"github.com/imnzr/virtual-number-service/database"
-	"github.com/julienschmidt/httprouter"
+	userrepository "github.com/imnzr/virtual-number-service/repository/user_repository"
+	userroutes "github.com/imnzr/virtual-number-service/routes/user_routes"
+	userservice "github.com/imnzr/virtual-number-service/service/user_service"
 )
 
 func main() {
@@ -24,16 +28,16 @@ func main() {
 
 	defer db.Close()
 
-	// Initialize the router and define routes
-	router := httprouter.New()
-	server := http.Server{
-		Addr:    "localhost:8080",
-		Handler: router,
-	}
-	err = server.ListenAndServe()
-	if err != nil {
-		log.Println("failed to start server:", err)
-		return
-	}
+	userrepository := userrepository.NewUserRepository()
+	userservice := userservice.NewUserService(userrepository, db)
+	usercontroller := usercontroller.NewUserController(userservice)
 
+	// Initialize the router and define routes
+	router := fiber.New()
+
+	// Define user routes
+	userroutes.UserRoutes(router, usercontroller)
+
+	// Server listening configuration
+	router.Listen("localhost:8080")
 }
