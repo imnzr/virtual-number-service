@@ -12,4 +12,6 @@ import (
 func UserRoutes(router *fiber.App, userController usercontroller.UserControllerInterface) {
 	router.Post("/api/v1/user/create", userController.CreateUser)
 	router.Post("/api/v1/user/login", userController.LoginUser)
+
+	router.Put("/api/v1/user/update-username/:id", userController.UpdateUserUsername)
 }
