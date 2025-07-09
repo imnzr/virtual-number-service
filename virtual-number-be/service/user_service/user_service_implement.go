@@ -10,6 +10,7 @@ import (
 	"github.com/imnzr/virtual-number-service/helper"
 	"github.com/imnzr/virtual-number-service/models"
 	userrepository "github.com/imnzr/virtual-number-service/repository/user_repository"
+	"github.com/imnzr/virtual-number-service/web/request"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -65,12 +66,31 @@ func (service *UserServiceImplement) ForgotPassword(ctx context.Context, email s
 
 // GetAllUsers implements UserServiceInterface.
 func (service *UserServiceImplement) GetAllUsers(ctx context.Context) ([]*models.User, error) {
-	panic("unimplemented")
+	tx, err := service.DB.Begin()
+	helper.ErrorTransaction(err)
+	defer helper.CommitOrRollback(tx)
+
+	result, err := service.UserRepository.GetAllUsers(ctx, tx)
+	if err != nil {
+		log.Printf("error to get all users")
+		return nil, fmt.Errorf("error to get all users")
+	}
+	return result, nil
 }
 
 // GetUserByEmail implements UserServiceInterface.
 func (service *UserServiceImplement) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
-	panic("unimplemented")
+	tx, err := service.DB.Begin()
+	helper.ErrorTransaction(err)
+	defer helper.CommitOrRollback(tx)
+
+	result, err := service.UserRepository.GetUserByEmail(ctx, tx, email)
+	if err != nil {
+		log.Printf("error get user by email")
+		return nil, fmt.Errorf("error get user by email")
+	}
+
+	return result, err
 }
 
 // GetUserById implements UserServiceInterface.
@@ -116,13 +136,72 @@ func (service *UserServiceImplement) LogoutUser(ctx context.Context, user_id int
 }
 
 // UpdateUserEmail implements UserServiceInterface.
-func (service *UserServiceImplement) UpdateUserEmail(ctx context.Context, user_id int) (*models.User, error) {
-	panic("unimplemented")
+func (service *UserServiceImplement) UpdateUserEmail(ctx context.Context, user_id int, email string) (*models.User, error) {
+	tx, err := service.DB.Begin()
+	helper.ErrorTransaction(err)
+	defer helper.CommitOrRollback(tx)
+
+	// find by id
+	user, err := service.UserRepository.GetUserById(ctx, tx, user_id)
+	if err != nil {
+		log.Printf("user not found")
+		return nil, fmt.Errorf("user not found")
+	}
+
+	user.Email = email
+
+	_, err = service.UserRepository.UpdateUserEmail(ctx, tx, user)
+	if err != nil {
+		log.Printf("error update user email")
+		return nil, fmt.Errorf("error update user email")
+	}
+
+	return user, nil
 }
 
 // UpdateUserPassword implements UserServiceInterface.
-func (service *UserServiceImplement) UpdateUserPassword(ctx context.Context, user_id int) (*models.User, error) {
-	panic("unimplemented")
+func (service *UserServiceImplement) UpdateUserPassword(ctx context.Context, user_id int, request request.UpdatePasswordRequest) (*models.User, error) {
+	tx, err := service.DB.Begin()
+	helper.ErrorTransaction(err)
+	defer helper.CommitOrRollback(tx)
+
+	// FIND BY ID
+	user, err := service.UserRepository.GetUserById(ctx, tx, user_id)
+	if err != nil {
+		log.Printf("error, user not found")
+		return nil, fmt.Errorf("error, user not found")
+	}
+
+	// VALIDATE CURRENT PASSWORD
+	if request.CurrentPassword != "" {
+		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(request.CurrentPassword)); err != nil {
+			log.Printf("invalid current password")
+			return nil, fmt.Errorf("invalid current password")
+		}
+	}
+
+	// VALIDATE NEW PASSWORD AND CONFIRMATION
+	if request.NewPassword != request.ConfirmPassword {
+		log.Printf("New password and confirmation do not match")
+		return nil, fmt.Errorf("new password and confirmation do not match")
+	}
+
+	// HASHED NEW PASSWORD
+	hashedNewPassword, err := bcrypt.GenerateFromPassword([]byte(request.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("error hashed password")
+		return nil, fmt.Errorf("error hashed password")
+	}
+
+	user.Password = string(hashedNewPassword)
+
+	_, err = service.UserRepository.UpdateUserPassword(ctx, tx, user)
+	if err != nil {
+		log.Printf("invalid update user password")
+		return nil, fmt.Errorf("invalid update user password")
+	}
+
+	return user, nil
 }
 
 // UpdateUserUsername implements UserServiceInterface.
