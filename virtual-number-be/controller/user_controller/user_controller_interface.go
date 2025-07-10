@@ -18,4 +18,5 @@ type UserControllerInterface interface {
 	LogoutUser(controller *fiber.Ctx) error
 
 	ForgotPassword(controller *fiber.Ctx) error
+	VerifyResetToken(controller *fiber.Ctx) error
 }

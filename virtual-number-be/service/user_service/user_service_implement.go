@@ -6,17 +6,61 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/imnzr/virtual-number-service/helper"
 	"github.com/imnzr/virtual-number-service/models"
 	userrepository "github.com/imnzr/virtual-number-service/repository/user_repository"
-	"github.com/imnzr/virtual-number-service/web/request"
+	"github.com/imnzr/virtual-number-service/utils"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type UserServiceImplement struct {
 	UserRepository userrepository.UserRepositoryInterface
 	DB             *sql.DB
+}
+
+// ResetPassword implements UserServiceInterface.
+func (service *UserServiceImplement) ResetPassword(ctx context.Context, email string, token string, newPassword string) error {
+	tx, err := service.DB.Begin()
+	helper.ErrorTransaction(err)
+	defer helper.CommitOrRollback(tx)
+
+	resetToken, err := service.UserRepository.FindResetToken(ctx, tx, email, token)
+	if err != nil {
+		return errors.New("token invalid")
+	}
+	if time.Now().After(resetToken.Expire) {
+		return errors.New("token expired")
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.New("failed hashed password")
+	}
+
+	if err := service.UserRepository.UpdateUserPassword(ctx, tx, email, string(hashedPassword)); err != nil {
+		return err
+	}
+
+	return service.UserRepository.DeleteResetToken(ctx, tx, email, token)
+}
+
+// VerifyResetToken implements UserServiceInterface.
+func (service *UserServiceImplement) VerifyResetToken(ctx context.Context, email string, token string) (bool, error) {
+	tx, err := service.DB.Begin()
+	helper.ErrorTransaction(err)
+	defer helper.CommitOrRollback(tx)
+
+	resetToken, err := service.UserRepository.FindResetToken(ctx, tx, email, token)
+	if err != nil {
+		return false, err
+	}
+	if resetToken == nil || time.Now().After(resetToken.Expire) {
+		return false, err
+	}
+
+	return true, nil
 }
 
 // CreateUser implements UserServiceInterface.
@@ -60,8 +104,39 @@ func (service *UserServiceImplement) DeleteUser(ctx context.Context, user_id int
 }
 
 // ForgotPassword implements UserServiceInterface.
-func (service *UserServiceImplement) ForgotPassword(ctx context.Context, email string) (string, error) {
-	panic("unimplemented")
+func (service *UserServiceImplement) ForgotPassword(ctx context.Context, email string) error {
+	tx, err := service.DB.Begin()
+	helper.ErrorTransaction(err)
+	defer helper.CommitOrRollback(tx)
+
+	user, err := service.UserRepository.GetUserByEmail(ctx, tx, email)
+	if err != nil || user == nil {
+		log.Printf("email not found")
+		return errors.New("email not found")
+	}
+
+	log.Printf("email ditemukan", email)
+
+	token := helper.GenerateToken(6)
+	expires := time.Now().Add(5 * time.Minute)
+
+	err = service.UserRepository.SavePasswordReset(ctx, tx, email, token, expires)
+	if err != nil {
+		log.Printf("error save password reset service")
+		return errors.New("error save password reset ")
+	}
+	body := fmt.Sprintf("kode verifikasi anda adalah: %s. berlaku selama 5 menit", token)
+
+	err = utils.SendEmail(email, "Reset Password", body)
+	if err != nil {
+		log.Printf("error kirim email: %v", err)
+		return errors.New("gagal kirim email")
+	}
+
+	log.Printf("email berasil dikirim")
+
+	return nil
+
 }
 
 // GetAllUsers implements UserServiceInterface.
@@ -159,50 +234,50 @@ func (service *UserServiceImplement) UpdateUserEmail(ctx context.Context, user_i
 	return user, nil
 }
 
-// UpdateUserPassword implements UserServiceInterface.
-func (service *UserServiceImplement) UpdateUserPassword(ctx context.Context, user_id int, request request.UpdatePasswordRequest) (*models.User, error) {
-	tx, err := service.DB.Begin()
-	helper.ErrorTransaction(err)
-	defer helper.CommitOrRollback(tx)
+// // UpdateUserPassword implements UserServiceInterface.
+// func (service *UserServiceImplement) UpdateUserPassword(ctx context.Context, user_id int, request request.UpdatePasswordRequest) (*models.User, error) {
+// 	tx, err := service.DB.Begin()
+// 	helper.ErrorTransaction(err)
+// 	defer helper.CommitOrRollback(tx)
 
-	// FIND BY ID
-	user, err := service.UserRepository.GetUserById(ctx, tx, user_id)
-	if err != nil {
-		log.Printf("error, user not found")
-		return nil, fmt.Errorf("error, user not found")
-	}
+// 	// FIND BY ID
+// 	user, err := service.UserRepository.GetUserById(ctx, tx, user_id)
+// 	if err != nil {
+// 		log.Printf("error, user not found")
+// 		return nil, fmt.Errorf("error, user not found")
+// 	}
 
-	// VALIDATE CURRENT PASSWORD
-	if request.CurrentPassword != "" {
-		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(request.CurrentPassword)); err != nil {
-			log.Printf("invalid current password")
-			return nil, fmt.Errorf("invalid current password")
-		}
-	}
+// 	// VALIDATE CURRENT PASSWORD
+// 	if request.CurrentPassword != "" {
+// 		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(request.CurrentPassword)); err != nil {
+// 			log.Printf("invalid current password")
+// 			return nil, fmt.Errorf("invalid current password")
+// 		}
+// 	}
 
-	// VALIDATE NEW PASSWORD AND CONFIRMATION
-	if request.NewPassword != request.ConfirmPassword {
-		log.Printf("New password and confirmation do not match")
-		return nil, fmt.Errorf("new password and confirmation do not match")
-	}
+// 	// VALIDATE NEW PASSWORD AND CONFIRMATION
+// 	if request.NewPassword != request.ConfirmPassword {
+// 		log.Printf("New password and confirmation do not match")
+// 		return nil, fmt.Errorf("new password and confirmation do not match")
+// 	}
 
-	// HASHED NEW PASSWORD
-	hashedNewPassword, err := bcrypt.GenerateFromPassword([]byte(request.NewPassword), bcrypt.DefaultCost)
-	if err != nil {
-		log.Printf("error hashed password")
-		return nil, fmt.Errorf("error hashed password")
-	}
+// 	// HASHED NEW PASSWORD
+// 	hashedNewPassword, err := bcrypt.GenerateFromPassword([]byte(request.NewPassword), bcrypt.DefaultCost)
+// 	if err != nil {
+// 		log.Printf("error hashed password")
+// 		return nil, fmt.Errorf("error hashed password")
+// 	}
 
-	user.Password = string(hashedNewPassword)
+// 	user.Password = string(hashedNewPassword)
 
-	_, err = service.UserRepository.UpdateUserPassword(ctx, tx, user)
-	if err != nil {
-		log.Printf("invalid update user password")
-		return nil, fmt.Errorf("invalid update user password")
-	}
+// 	_, err = service.UserRepository.UpdateUserPassword()
+// 	if err != nil {
+// 		log.Printf("invalid update user password")
+// 		return nil, fmt.Errorf("invalid update user password")
+// 	}
 
-	return user, nil
-}
+// 	return user, nil
+// }
 
 // UpdateUserUsername implements UserServiceInterface.
 func (service *UserServiceImplement) UpdateUserUsername(ctx context.Context, user_id int, username string) (*models.User, error) {

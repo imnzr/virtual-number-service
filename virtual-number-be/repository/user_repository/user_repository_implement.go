@@ -4,11 +4,44 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"time"
 
 	"github.com/imnzr/virtual-number-service/models"
 )
 
 type UserRepositoryImplement struct{}
+
+// DeleteResetToken implements UserRepositoryInterface.
+func (u *UserRepositoryImplement) DeleteResetToken(ctx context.Context, tx *sql.Tx, email string, token string) error {
+	query := "DELETE FROM password_reset WHERE email = ? AND token = ?"
+	_, err := tx.ExecContext(ctx, query, email, token)
+	return err
+}
+
+// FindResetToken implements UserRepositoryInterface.
+func (u *UserRepositoryImplement) FindResetToken(ctx context.Context, tx *sql.Tx, email string, token string) (*models.ResetPassword, error) {
+	query := "SELECT email, token, expires_at FROM reset_password WHERE email = ? AND token = ?"
+
+	var reset models.ResetPassword
+
+	row := tx.QueryRowContext(ctx, query)
+	err := row.Scan(&reset.Email, &reset.Token, &reset.Expire)
+	if err != nil {
+		return nil, err
+	}
+
+	return &reset, nil
+}
+
+// SavePasswordReset implements UserRepositoryInterface.
+func (u *UserRepositoryImplement) SavePasswordReset(ctx context.Context, tx *sql.Tx, email, token string, expires time.Time) error {
+	query := "INSERT INTO password_reset(email, token, expires_at) VALUES(?,?,?)"
+	_, err := tx.ExecContext(ctx, query, email, token, expires)
+	if err != nil {
+		log.Printf("db error insert password reset: %v", err)
+	}
+	return err
+}
 
 // CreateUser implements UserRepositoryInterface.
 func (u *UserRepositoryImplement) CreateUser(ctx context.Context, tx *sql.Tx, user *models.User) (*models.User, error) {
@@ -31,11 +64,6 @@ func (u *UserRepositoryImplement) CreateUser(ctx context.Context, tx *sql.Tx, us
 
 // ChangePassword implements UserRepositoryInterface.
 func (u *UserRepositoryImplement) ChangePassword(ctx context.Context, tx *sql.Tx, userId int, oldPassword string, newPassword string) error {
-	panic("unimplemented")
-}
-
-// DeleteUser implements UserRepositoryInterface.
-func (u *UserRepositoryImplement) DeleteUser(ctx context.Context, tx *sql.Tx, userId int) error {
 	panic("unimplemented")
 }
 
@@ -168,23 +196,10 @@ func (u *UserRepositoryImplement) UpdateUserEmail(ctx context.Context, tx *sql.T
 }
 
 // UpdateUserPassword implements UserRepositoryInterface.
-func (u *UserRepositoryImplement) UpdateUserPassword(ctx context.Context, tx *sql.Tx, user *models.User) (*models.User, error) {
-	query := "UPDATE users SET password = ? WHERE id = ?"
-	result, err := tx.ExecContext(ctx, query, user.Password, user.Id)
-	if err != nil {
-		log.Printf("failed to execute query update user password: %v", err)
-		return nil, err
-	}
-
-	RowsAffected, err := result.RowsAffected()
-	if err != nil {
-		log.Printf("failed to get rows affected: %v", err)
-		return nil, err
-	}
-	if RowsAffected == 0 {
-		log.Printf("no user found with id: %d", user.Id)
-	}
-	return user, nil
+func (u *UserRepositoryImplement) UpdateUserPassword(ctx context.Context, tx *sql.Tx, email, hashedPassword string) error {
+	query := "UPDATE users SET password = ? WHERE email = ?"
+	_, err := tx.ExecContext(ctx, query, hashedPassword, email)
+	return err
 }
 
 // UpdateUserUsernme implements UserRepositoryInterface.
@@ -200,11 +215,6 @@ func (u *UserRepositoryImplement) UpdateUserUsername(ctx context.Context, tx *sq
 	}
 
 	return user, nil
-}
-
-// VerifyEmail implements UserRepositoryInterface.
-func (u *UserRepositoryImplement) VerifyEmail(ctx context.Context, tx *sql.Tx, userId int) error {
-	panic("unimplemented")
 }
 
 func NewUserRepository() UserRepositoryInterface {

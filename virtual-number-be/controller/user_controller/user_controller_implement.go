@@ -1,6 +1,7 @@
 package usercontroller
 
 import (
+	"log"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -13,6 +14,39 @@ import (
 
 type UserControllerImplement struct {
 	UserService userservice.UserServiceInterface
+}
+
+// VerifyResetToken implements UserControllerInterface.
+func (uc *UserControllerImplement) VerifyResetToken(controller *fiber.Ctx) error {
+	type Request struct {
+		Email string `json:"email"`
+		Token string `json:"token"`
+	}
+
+	var req Request
+
+	if err := controller.BodyParser(&req); err != nil || req.Email == "" || req.Token == "" {
+		return controller.Status(400).JSON(fiber.Map{
+			"message": "request invalid",
+		})
+	}
+
+	valid, err := uc.UserService.VerifyResetToken(controller.Context(), req.Email, req.Token)
+	if err != nil {
+		controller.Status(400).JSON(fiber.Map{
+			"message": err.Error(),
+		})
+	}
+
+	if !valid {
+		return controller.Status(200).JSON(fiber.Map{
+			"message": "token invalid or token expires",
+		})
+	}
+
+	return controller.Status(200).JSON(fiber.Map{
+		"message": "token is valid, go to next change password",
+	})
 }
 
 // CreateUser implements UserControllerInterface.
@@ -42,7 +76,27 @@ func (uc *UserControllerImplement) DeleteUser(controller *fiber.Ctx) error {
 
 // ForgotPassword implements UserControllerInterface.
 func (uc *UserControllerImplement) ForgotPassword(controller *fiber.Ctx) error {
-	panic("unimplemented")
+
+	var req request.EmailRequest
+
+	log.Println("Body raw:", string(controller.Body()))
+
+	if err := controller.BodyParser(&req); err != nil {
+		return controller.Status(400).JSON(fiber.Map{
+			"error": err.Error() + err.Error(),
+		})
+	}
+
+	err := uc.UserService.ForgotPassword(controller.Context(), req.Email)
+	if err != nil {
+		return controller.Status(400).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return controller.JSON(fiber.Map{
+		"message": "Kode verifikasi telah dikirim ke email",
+	})
 }
 
 // GetAllUsers implements UserControllerInterface.
@@ -129,15 +183,6 @@ func (uc *UserControllerImplement) LoginUser(controller *fiber.Ctx) error {
 	}
 
 	return controller.Status(200).JSON(response)
-
-	// return controller.JSON(fiber.Map{
-	// 	"token": token,
-	// 	"user": fiber.Map{
-	// 		"Id":       user.Id,
-	// 		"Username": user.Username,
-	// 		"Email":    user.Email,
-	// 	},
-	// })
 }
 
 // LogoutUser implements UserControllerInterface.
@@ -189,40 +234,30 @@ func (uc *UserControllerImplement) UpdateUserEmail(controller *fiber.Ctx) error 
 
 // UpdateUserPassword implements UserControllerInterface.
 func (uc *UserControllerImplement) UpdateUserPassword(controller *fiber.Ctx) error {
-	var request request.UpdatePasswordRequest
+	type Request struct {
+		Email       string `json:"email"`
+		Token       string `json:"token"`
+		NewPassword string `json:"new_password"`
+	}
 
-	paramsId := controller.Params("id")
-	userId, err := strconv.Atoi(paramsId)
+	var req Request
 
-	if err != nil || userId <= 0 {
+	if err := controller.BodyParser(&req); err != nil {
+		return controller.Status(400).JSON(fiber.Map{
+			"message": "request invalid",
+		})
+	}
+
+	err := uc.UserService.ResetPassword(controller.Context(), req.Email, req.Token, req.NewPassword)
+	if err != nil {
 		return controller.Status(400).JSON(fiber.Map{
 			"message": err.Error(),
 		})
 	}
 
-	if err := controller.BodyParser(&request); err != nil {
-		return controller.Status(400).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	// GET USER ID
-	getUser, err := uc.UserService.GetUserById(controller.Context(), userId)
-	if err != nil {
-		return controller.Status(400).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	// UPDATE PASSWORD
-	updatePasswordUser, err := uc.UserService.UpdateUserPassword(controller.Context(), getUser.Id, request)
-	if err != nil {
-		return controller.Status(400).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return controller.Status(200).JSON(updatePasswordUser)
+	return controller.Status(200).JSON(fiber.Map{
+		"message": "Password update successfully",
+	})
 }
 
 // UpdateUserUsername implements UserControllerInterface.

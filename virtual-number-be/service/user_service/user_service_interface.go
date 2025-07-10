@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/imnzr/virtual-number-service/models"
-	"github.com/imnzr/virtual-number-service/web/request"
 )
 
 type UserServiceInterface interface {
@@ -13,7 +12,7 @@ type UserServiceInterface interface {
 
 	UpdateUserUsername(ctx context.Context, user_id int, username string) (*models.User, error)
 	UpdateUserEmail(ctx context.Context, user_id int, email string) (*models.User, error)
-	UpdateUserPassword(ctx context.Context, user_id int, request request.UpdatePasswordRequest) (*models.User, error)
+	// UpdateUserPassword(ctx context.Context, user_id int, request request.UpdatePasswordRequest) (*models.User, error)
 
 	GetAllUsers(ctx context.Context) ([]*models.User, error)
 	GetUserById(ctx context.Context, user_id int) (*models.User, error)
@@ -22,5 +21,7 @@ type UserServiceInterface interface {
 	LoginUser(ctx context.Context, email string, password string) (*models.User, error)
 	LogoutUser(ctx context.Context, user_id int) error
 
-	ForgotPassword(ctx context.Context, email string) (string, error)
+	ForgotPassword(ctx context.Context, email string) error
+	VerifyResetToken(ctx context.Context, email, token string) (bool, error)
+	ResetPassword(ctx context.Context, email, token, newPassword string) error
 }
