@@ -9,6 +9,10 @@ func UserRoutes(router *fiber.App, userController usercontroller.UserControllerI
 	router.Post("/api/v1/user/create", userController.CreateUser)
 	router.Post("/api/v1/user/login", userController.LoginUser)
 
+	router.Post("/api/v1/user/forgot-password", userController.ForgotPassword)
+	router.Post("/api/v1/user/verify-reset-token", userController.VerifyResetToken)
+	router.Post("/api/v1/user/forgot-password", userController.ForgotPassword)
+
 	router.Put("/api/v1/user/update-username/:id", userController.UpdateUserUsername)
 	router.Put("/api/v1/user/update-email/:id", userController.UpdateUserEmail)
 	router.Put("/api/v1/user/update-password/:id", userController.UpdateUserPassword)
