@@ -27,23 +27,16 @@ func (uc *UserControllerImplement) VerifyResetToken(controller *fiber.Ctx) error
 
 	if err := controller.BodyParser(&req); err != nil || req.Email == "" || req.Token == "" {
 		return controller.Status(400).JSON(fiber.Map{
-			"message": "request invalid",
+			"message": "invalid request body",
 		})
 	}
 
-	valid, err := uc.UserService.VerifyResetToken(controller.Context(), req.Email, req.Token)
-	if err != nil {
-		controller.Status(400).JSON(fiber.Map{
-			"message": err.Error(),
+	errReset := uc.UserService.VerifyResetToken(controller.Context(), req.Email, req.Token)
+	if errReset != nil {
+		return controller.Status(400).JSON(fiber.Map{
+			"message": "token verification failed",
 		})
 	}
-
-	if !valid {
-		return controller.Status(200).JSON(fiber.Map{
-			"message": "token invalid or token expires",
-		})
-	}
-
 	return controller.Status(200).JSON(fiber.Map{
 		"message": "token is valid, go to next change password",
 	})
@@ -79,20 +72,34 @@ func (uc *UserControllerImplement) ForgotPassword(controller *fiber.Ctx) error {
 
 	var req request.EmailRequest
 
-	log.Println("Body raw:", string(controller.Body()))
+	// log.Println("Body raw:", string(controller.Body()))
 
 	if err := controller.BodyParser(&req); err != nil {
+		log.Println("❌ Gagal parse body:", err)
 		return controller.Status(400).JSON(fiber.Map{
 			"error": err.Error() + err.Error(),
 		})
 	}
 
+	// log.Printf("📨 Memproses forgot password untuk %s", req.Email)
+
+	if req.Email == "" {
+		return controller.Status(400).JSON(fiber.Map{
+			"error": "email tidak boleh kosong",
+		})
+	}
+
+	// log.Printf("📧 Request email: %s", req.Email)
+
 	err := uc.UserService.ForgotPassword(controller.Context(), req.Email)
 	if err != nil {
+		// log.Println("❌ Error dari service:", err)
 		return controller.Status(400).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
+
+	// log.Println("✅ ForgotPassword selesai tanpa error")
 
 	return controller.JSON(fiber.Map{
 		"message": "Kode verifikasi telah dikirim ke email",
