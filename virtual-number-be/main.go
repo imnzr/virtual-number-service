@@ -16,6 +16,10 @@ import (
 func main() {
 	// Load environment variables and database connection
 	config.LoadEnv()
+
+	// Redis
+	config.InitRedis()
+
 	db, err := database.DatabaseConnection()
 	if err != nil {
 		log.Fatal("error connecting to the database:", err)
