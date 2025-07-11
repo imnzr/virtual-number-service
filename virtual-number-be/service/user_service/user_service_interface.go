@@ -22,6 +22,6 @@ type UserServiceInterface interface {
 	LogoutUser(ctx context.Context, user_id int) error
 
 	ForgotPassword(ctx context.Context, email string) error
-	VerifyResetToken(ctx context.Context, email, token string) (bool, error)
+	VerifyResetToken(ctx context.Context, email, token string) error
 	ResetPassword(ctx context.Context, email, token, newPassword string) error
 }
