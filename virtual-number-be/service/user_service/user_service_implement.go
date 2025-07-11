@@ -6,12 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
+	"github.com/imnzr/virtual-number-service/config"
 	"github.com/imnzr/virtual-number-service/helper"
 	"github.com/imnzr/virtual-number-service/models"
 	userrepository "github.com/imnzr/virtual-number-service/repository/user_repository"
 	"github.com/imnzr/virtual-number-service/utils"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -47,20 +50,35 @@ func (service *UserServiceImplement) ResetPassword(ctx context.Context, email st
 }
 
 // VerifyResetToken implements UserServiceInterface.
-func (service *UserServiceImplement) VerifyResetToken(ctx context.Context, email string, token string) (bool, error) {
-	tx, err := service.DB.Begin()
-	helper.ErrorTransaction(err)
-	defer helper.CommitOrRollback(tx)
+func (service *UserServiceImplement) VerifyResetToken(ctx context.Context, email string, token string) error {
+	key := "reset:" + email
 
-	resetToken, err := service.UserRepository.FindResetToken(ctx, tx, email, token)
+	storeToken, err := config.RedisClient.Get(config.RedisCtx, key).Result()
 	if err != nil {
-		return false, err
-	}
-	if resetToken == nil || time.Now().After(resetToken.Expire) {
-		return false, err
+		if err == redis.Nil {
+			// log.Printf("❌ Token tidak ditemukan untuk email %s", email)
+			return errors.New("token not found or expired")
+		}
+		// log.Printf("❌ Gagal ambil token Redis: %v", err)
+		return errors.New("failed get token")
 	}
 
-	return true, nil
+	storeToken = strings.TrimSpace(storeToken)
+	token = strings.TrimSpace(token)
+
+	// log.Printf("🔍 storeToken: '%s', inputToken: '%s'", storeToken, token)
+
+	if storeToken != token {
+		// log.Println("❌ Token tidak cocok")
+		return errors.New("token invalid")
+	}
+
+	// log.Printf("✅ Token cocok untuk %s", email)
+
+	// Hapus token agar hanya sekali pakai
+	config.RedisClient.Del(config.RedisCtx, key)
+
+	return nil
 }
 
 // CreateUser implements UserServiceInterface.
@@ -111,29 +129,31 @@ func (service *UserServiceImplement) ForgotPassword(ctx context.Context, email s
 
 	user, err := service.UserRepository.GetUserByEmail(ctx, tx, email)
 	if err != nil || user == nil {
-		log.Printf("email not found")
+		// log.Printf("email not found")
 		return errors.New("email not found")
 	}
 
-	log.Printf("email ditemukan", email)
-
 	token := helper.GenerateToken(6)
-	expires := time.Now().Add(5 * time.Minute)
+	key := "reset:" + email
 
-	err = service.UserRepository.SavePasswordReset(ctx, tx, email, token, expires)
-	if err != nil {
-		log.Printf("error save password reset service")
-		return errors.New("error save password reset ")
+	// log.Printf("start redis client")
+
+	// log.Printf("🔁 Menyimpan token ke Redis... key=%s, value=%s", key, token)
+	errRedis := config.RedisClient.Set(config.RedisCtx, key, token, 5*time.Minute).Err()
+	if errRedis != nil {
+		// log.Printf("gagal simpan token ke redis: %v", errRedis)
+		return errors.New("failed save token reset password")
 	}
-	body := fmt.Sprintf("kode verifikasi anda adalah: %s. berlaku selama 5 menit", token)
+	// log.Printf("token disimpan ke redis (%s)", email)
 
-	err = utils.SendEmail(email, "Reset Password", body)
-	if err != nil {
-		log.Printf("error kirim email: %v", err)
-		return errors.New("gagal kirim email")
-	}
+	// log.Printf("📨 Mengirim email verifikasi ke %s...", email)
 
-	log.Printf("email berasil dikirim")
+	go func(email, token string) {
+		body := fmt.Sprintf("kode verifikasi anda adalah: %s. berlaku selama 5 menit", token)
+		if err := utils.SendEmail(email, "Reset Password", body); err != nil {
+			// log.Printf("gagal kirim email ke")
+		}
+	}(email, token)
 
 	return nil
 
