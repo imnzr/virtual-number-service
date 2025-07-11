@@ -58,7 +58,8 @@ func SendEmail(to, subject, body string) error {
 		return err
 	}
 
-	message := []byte("Subject: " + subject + "\r\n\r\n" + body)
+	message := []byte(fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\n\r\n%s", from, to, subject, body))
+
 	_, err = w.Write(message)
 	if err != nil {
 		return err
