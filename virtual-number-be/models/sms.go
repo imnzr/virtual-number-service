@@ -1,11 +1,11 @@
 package models
 
-type SMSOrder struct {
-	Id     int     `json:"id"`
-	Phone  string  `json:"phone"`
-	Status string  `json:"status"`
-	Price  float64 `json:"price"`
-}
+// type SMSOrder struct {
+// 	Id     int     `json:"id"`
+// 	Phone  string  `json:"phone"`
+// 	Status string  `json:"status"`
+// 	Price  float64 `json:"price"`
+// }
 
 type SMSMessage struct {
 	Code string `json:"code"`
